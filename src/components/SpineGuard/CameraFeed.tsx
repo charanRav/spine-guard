@@ -10,7 +10,7 @@ import '@tensorflow/tfjs-backend-webgl';
 interface CameraFeedProps {
   isActive: boolean;
   showOverlay: boolean;
-  onPoseDetected: (landmarks: PoseLandmarks) => void;
+  onPoseDetected: (landmarks: PoseLandmarks, confidence: number, neckAngle?: number) => void;
 }
 
 export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeedProps) => {
@@ -108,6 +108,32 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
         const rightShoulder = keypoints.find(kp => kp.name === 'right_shoulder');
         const leftHip = keypoints.find(kp => kp.name === 'left_hip');
         const rightHip = keypoints.find(kp => kp.name === 'right_hip');
+        const nose = keypoints.find(kp => kp.name === 'nose');
+        const leftEar = keypoints.find(kp => kp.name === 'left_ear');
+
+        // Calculate average confidence
+        const avgConfidence = keypoints
+          .filter(kp => kp.score && kp.score > 0)
+          .reduce((acc, kp) => acc + (kp.score || 0), 0) / keypoints.length;
+
+        // Calculate neck angle if face landmarks available
+        let neckAngle: number | undefined;
+        if (nose && leftEar && leftShoulder && nose.score && leftEar.score && leftShoulder.score) {
+          const earToNose = {
+            x: nose.x - leftEar.x,
+            y: nose.y - leftEar.y,
+          };
+          const earToShoulder = {
+            x: leftShoulder.x - leftEar.x,
+            y: leftShoulder.y - leftEar.y,
+          };
+          
+          // Calculate angle between vectors
+          const dotProduct = earToNose.x * earToShoulder.x + earToNose.y * earToShoulder.y;
+          const mag1 = Math.sqrt(earToNose.x ** 2 + earToNose.y ** 2);
+          const mag2 = Math.sqrt(earToShoulder.x ** 2 + earToShoulder.y ** 2);
+          neckAngle = Math.acos(dotProduct / (mag1 * mag2)) * (180 / Math.PI);
+        }
 
         if (leftShoulder && rightShoulder && leftHip && rightHip) {
           const poseLandmarks: PoseLandmarks = {
@@ -116,7 +142,7 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
             leftHip: { x: leftHip.x, y: leftHip.y, z: 0 },
             rightHip: { x: rightHip.x, y: rightHip.y, z: 0 },
           };
-          onPoseDetected(poseLandmarks);
+          onPoseDetected(poseLandmarks, avgConfidence, neckAngle);
         }
       }
     } catch (err) {

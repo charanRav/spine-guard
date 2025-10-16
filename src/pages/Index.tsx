@@ -10,6 +10,8 @@ import { SettingsPanel } from '@/components/SpineGuard/SettingsPanel';
 import { AchievementsPanel } from '@/components/SpineGuard/AchievementsPanel';
 import { BreakReminderPanel } from '@/components/SpineGuard/BreakReminderPanel';
 import { PostureScoreCard } from '@/components/SpineGuard/PostureScoreCard';
+import { DetectionQuality } from '@/components/SpineGuard/DetectionQuality';
+import { PostureModeToggle } from '@/components/SpineGuard/PostureModeToggle';
 import { useToast } from '@/hooks/use-toast';
 import {
   PostureStatus,
@@ -35,6 +37,7 @@ const DEFAULT_SETTINGS: Settings = {
   breakReminders: true,
   breakInterval: 45,
   voiceEnabled: false,
+  postureMode: 'sitting',
 };
 
 const DEFAULT_ACHIEVEMENTS = [
@@ -69,6 +72,8 @@ const Index = () => {
     sittingTime: 0,
   });
   const [goodStreakStart, setGoodStreakStart] = useState<number | null>(null);
+  const [detectionConfidence, setDetectionConfidence] = useState(0);
+  const [neckAngle, setNeckAngle] = useState<number | undefined>(undefined);
 
   // Load saved data on mount
   useEffect(() => {
@@ -148,7 +153,9 @@ const Index = () => {
 
   // Calculate posture from landmarks
   const calculatePosture = useCallback(
-    (landmarks: PoseLandmarks) => {
+    (landmarks: PoseLandmarks, confidence: number, neckAngleValue?: number) => {
+      setDetectionConfidence(confidence);
+      setNeckAngle(neckAngleValue);
       // Calculate midpoints
       const shoulderMid = {
         x: (landmarks.leftShoulder.x + landmarks.rightShoulder.x) / 2,
@@ -183,10 +190,13 @@ const Index = () => {
           status = 'Poor';
         }
       } else {
-        // Fallback heuristics if not calibrated
-        if (newSmoothed <= 6) {
+        // Fallback heuristics if not calibrated (adjusted for mode)
+        const baseGood = settings.postureMode === 'sitting' ? 6 : 8;
+        const baseModerate = settings.postureMode === 'sitting' ? 12 : 15;
+        
+        if (newSmoothed <= baseGood) {
           status = 'Good';
-        } else if (newSmoothed <= 12) {
+        } else if (newSmoothed <= baseModerate) {
           status = 'Moderate';
         } else {
           status = 'Poor';
@@ -431,6 +441,15 @@ const Index = () => {
               />
             ) : (
               <>
+                <PostureModeToggle 
+                  mode={settings.postureMode}
+                  onModeChange={(mode) => handleSettingsChange({ ...settings, postureMode: mode })}
+                />
+                <DetectionQuality 
+                  confidence={detectionConfidence}
+                  neckAngle={neckAngle}
+                  mode={settings.postureMode}
+                />
                 <CalibrationPanel
                   onCaptureNeutral={handleCaptureNeutral}
                   onCaptureSlouch={handleCaptureSlouch}

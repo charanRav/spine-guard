@@ -30,6 +30,7 @@ export interface Settings {
   breakReminders: boolean;
   breakInterval: number;
   voiceEnabled: boolean;
+  postureMode: 'sitting' | 'standing';
 }
 
 export interface Achievement {
