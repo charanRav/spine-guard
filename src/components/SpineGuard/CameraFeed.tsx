@@ -21,6 +21,7 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
+  const smoothedKeypointsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   useEffect(() => {
     if (!isActive) {
@@ -133,17 +134,20 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
 
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-    // Draw keypoints
+    // Smooth keypoints using exponential moving average
+    const smoothingFactor = 0.3;
     pose.keypoints.forEach(keypoint => {
       if (keypoint.score && keypoint.score > 0.3) {
-        ctx.beginPath();
-        ctx.arc(keypoint.x, keypoint.y, 6, 0, 2 * Math.PI);
-        ctx.fillStyle = '#ff0088';
-        ctx.fill();
+        const prev = smoothedKeypointsRef.current.get(keypoint.name || '');
+        if (prev) {
+          keypoint.x = prev.x * (1 - smoothingFactor) + keypoint.x * smoothingFactor;
+          keypoint.y = prev.y * (1 - smoothingFactor) + keypoint.y * smoothingFactor;
+        }
+        smoothedKeypointsRef.current.set(keypoint.name || '', { x: keypoint.x, y: keypoint.y });
       }
     });
 
-    // Draw skeleton
+    // Draw skeleton connections with glow effect
     const connections = [
       ['left_shoulder', 'right_shoulder'],
       ['left_shoulder', 'left_hip'],
@@ -155,19 +159,65 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
       ['right_elbow', 'right_wrist'],
     ];
 
-    ctx.strokeStyle = '#00ff88';
-    ctx.lineWidth = 4;
-
     connections.forEach(([start, end]) => {
       const startPoint = pose.keypoints.find(kp => kp.name === start);
       const endPoint = pose.keypoints.find(kp => kp.name === end);
 
       if (startPoint && endPoint && startPoint.score && endPoint.score && 
           startPoint.score > 0.3 && endPoint.score > 0.3) {
+        
+        // Draw glow effect
+        ctx.strokeStyle = 'rgba(0, 255, 136, 0.3)';
+        ctx.lineWidth = 12;
+        ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(startPoint.x, startPoint.y);
         ctx.lineTo(endPoint.x, endPoint.y);
         ctx.stroke();
+        
+        // Draw main line with gradient
+        const gradient = ctx.createLinearGradient(
+          startPoint.x, startPoint.y,
+          endPoint.x, endPoint.y
+        );
+        gradient.addColorStop(0, '#00ff88');
+        gradient.addColorStop(1, '#00ddff');
+        
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 4;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00ff88';
+        ctx.beginPath();
+        ctx.moveTo(startPoint.x, startPoint.y);
+        ctx.lineTo(endPoint.x, endPoint.y);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    });
+
+    // Draw keypoints with pulse effect
+    pose.keypoints.forEach(keypoint => {
+      if (keypoint.score && keypoint.score > 0.3) {
+        // Outer glow
+        ctx.beginPath();
+        ctx.arc(keypoint.x, keypoint.y, 10, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255, 0, 136, 0.2)';
+        ctx.fill();
+        
+        // Main point
+        ctx.beginPath();
+        ctx.arc(keypoint.x, keypoint.y, 6, 0, 2 * Math.PI);
+        const pointGradient = ctx.createRadialGradient(
+          keypoint.x, keypoint.y, 0,
+          keypoint.x, keypoint.y, 6
+        );
+        pointGradient.addColorStop(0, '#ff0088');
+        pointGradient.addColorStop(1, '#ff0044');
+        ctx.fillStyle = pointGradient;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ff0088';
+        ctx.fill();
+        ctx.shadowBlur = 0;
       }
     });
   };
