@@ -3,6 +3,8 @@ import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Camera, CameraOff } from 'lucide-react';
 import { PoseLandmarks } from './types';
+import * as poseDetection from '@tensorflow-models/pose-detection';
+import '@tensorflow/tfjs-backend-webgl';
 
 interface CameraFeedProps {
   isActive: boolean;
@@ -10,21 +12,12 @@ interface CameraFeedProps {
   onPoseDetected: (landmarks: PoseLandmarks) => void;
 }
 
-declare global {
-  interface Window {
-    Pose: any;
-    drawConnectors: any;
-    drawLandmarks: any;
-    POSE_CONNECTIONS: any;
-  }
-}
-
 export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeedProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const poseRef = useRef<any>(null);
+  const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
 
@@ -52,20 +45,13 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
       });
       streamRef.current = stream;
 
-      // Ensure the <video> element exists even while loading UI is shown
-      let guardTries = 0;
-      while (!videoRef.current && guardTries < 50) {
-        await new Promise(resolve => setTimeout(resolve, 20));
-        guardTries++;
-      }
       if (!videoRef.current) throw new Error('Video element not found');
 
-      // Attach the stream and wait for metadata
       videoRef.current.srcObject = stream;
       videoRef.current.muted = true;
       // @ts-ignore - Safari/iOS requires playsInline
       videoRef.current.playsInline = true;
-      
+
       await new Promise<void>((resolve) => {
         if (!videoRef.current) return resolve();
         videoRef.current.onloadedmetadata = () => resolve();
@@ -73,33 +59,17 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
 
       await videoRef.current.play();
 
-      console.log('Video playing, waiting for MediaPipe...');
+      console.log('Initializing MoveNet detector...');
 
-      // Wait for MediaPipe Pose to load
-      let attempts = 0;
-      while (!window.Pose && attempts < 50) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-      }
+      // Create MoveNet detector - simpler and more accurate
+      const detector = await poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
+        {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+        }
+      );
 
-      if (!window.Pose) {
-        throw new Error('MediaPipe Pose failed to load. Please refresh.');
-      }
-
-      console.log('Initializing Pose detector...');
-
-      poseRef.current = new window.Pose({
-        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
-      });
-
-      poseRef.current.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-
-      poseRef.current.onResults(onResults);
+      detectorRef.current = detector;
 
       console.log('Starting detection loop...');
       detectPose();
@@ -112,13 +82,35 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
   };
 
   const detectPose = async () => {
-    if (!poseRef.current || !videoRef.current || videoRef.current.readyState < 2) {
+    if (!detectorRef.current || !videoRef.current || videoRef.current.readyState < 2) {
       animationRef.current = requestAnimationFrame(detectPose);
       return;
     }
 
     try {
-      await poseRef.current.send({ image: videoRef.current });
+      const poses = await detectorRef.current.estimatePoses(videoRef.current);
+      
+      if (poses.length > 0) {
+        const pose = poses[0];
+        drawPose(pose);
+        
+        // Extract landmarks for posture detection
+        const keypoints = pose.keypoints;
+        const leftShoulder = keypoints.find(kp => kp.name === 'left_shoulder');
+        const rightShoulder = keypoints.find(kp => kp.name === 'right_shoulder');
+        const leftHip = keypoints.find(kp => kp.name === 'left_hip');
+        const rightHip = keypoints.find(kp => kp.name === 'right_hip');
+
+        if (leftShoulder && rightShoulder && leftHip && rightHip) {
+          const poseLandmarks: PoseLandmarks = {
+            leftShoulder: { x: leftShoulder.x, y: leftShoulder.y, z: 0 },
+            rightShoulder: { x: rightShoulder.x, y: rightShoulder.y, z: 0 },
+            leftHip: { x: leftHip.x, y: leftHip.y, z: 0 },
+            rightHip: { x: rightHip.x, y: rightHip.y, z: 0 },
+          };
+          onPoseDetected(poseLandmarks);
+        }
+      }
     } catch (err) {
       console.warn('Detection error:', err);
     }
@@ -126,57 +118,73 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
     animationRef.current = requestAnimationFrame(detectPose);
   };
 
-  const onResults = (results: any) => {
-    if (!results.poseLandmarks) return;
+  const drawPose = (pose: poseDetection.Pose) => {
+    if (!showOverlay || !canvasRef.current) return;
 
-    const landmarks = results.poseLandmarks;
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
 
-    // Draw overlay
-    if (showOverlay && canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx && window.drawConnectors && window.drawLandmarks) {
-        ctx.save();
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        
-        window.drawConnectors(ctx, landmarks, window.POSE_CONNECTIONS, { color: '#00ff88', lineWidth: 4 });
-        window.drawLandmarks(ctx, landmarks, { color: '#ff0088', lineWidth: 2, radius: 6 });
-        
-        ctx.restore();
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+    // Draw keypoints
+    pose.keypoints.forEach(keypoint => {
+      if (keypoint.score && keypoint.score > 0.3) {
+        ctx.beginPath();
+        ctx.arc(keypoint.x, keypoint.y, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ff0088';
+        ctx.fill();
       }
-    }
+    });
 
-    // Send pose data
-    if (landmarks.length >= 24) {
-      const poseLandmarks: PoseLandmarks = {
-        leftShoulder: landmarks[11],
-        rightShoulder: landmarks[12],
-        leftHip: landmarks[23],
-        rightHip: landmarks[24],
-      };
-      onPoseDetected(poseLandmarks);
-    }
+    // Draw skeleton
+    const connections = [
+      ['left_shoulder', 'right_shoulder'],
+      ['left_shoulder', 'left_hip'],
+      ['right_shoulder', 'right_hip'],
+      ['left_hip', 'right_hip'],
+      ['left_shoulder', 'left_elbow'],
+      ['left_elbow', 'left_wrist'],
+      ['right_shoulder', 'right_elbow'],
+      ['right_elbow', 'right_wrist'],
+    ];
+
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 4;
+
+    connections.forEach(([start, end]) => {
+      const startPoint = pose.keypoints.find(kp => kp.name === start);
+      const endPoint = pose.keypoints.find(kp => kp.name === end);
+
+      if (startPoint && endPoint && startPoint.score && endPoint.score && 
+          startPoint.score > 0.3 && endPoint.score > 0.3) {
+        ctx.beginPath();
+        ctx.moveTo(startPoint.x, startPoint.y);
+        ctx.lineTo(endPoint.x, endPoint.y);
+        ctx.stroke();
+      }
+    });
   };
 
   const cleanup = () => {
     console.log('Cleaning up...');
-    
+
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
-    
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    
+
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-    
-    if (poseRef.current) {
-      poseRef.current.close();
-      poseRef.current = null;
+
+    if (detectorRef.current) {
+      detectorRef.current.dispose();
+      detectorRef.current = null;
     }
   };
 
