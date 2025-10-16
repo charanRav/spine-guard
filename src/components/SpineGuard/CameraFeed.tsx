@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Camera, CameraOff } from 'lucide-react';
 import { PoseLandmarks } from './types';
 import * as poseDetection from '@tensorflow-models/pose-detection';
+import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
 
 interface CameraFeedProps {
@@ -59,7 +60,13 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
 
       await videoRef.current.play();
 
-      console.log('Initializing MoveNet detector...');
+      console.log('Initializing TensorFlow.js backend...');
+      
+      // Initialize TensorFlow backend
+      await tf.setBackend('webgl');
+      await tf.ready();
+
+      console.log('Creating MoveNet detector...');
 
       // Create MoveNet detector - simpler and more accurate
       const detector = await poseDetection.createDetector(
