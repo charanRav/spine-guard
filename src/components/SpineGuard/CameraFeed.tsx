@@ -6,6 +6,7 @@ import { PoseLandmarks } from './types';
 import * as poseDetection from '@tensorflow-models/pose-detection';
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
+import '@tensorflow/tfjs-backend-cpu';
 
 interface CameraFeedProps {
   isActive: boolean;
