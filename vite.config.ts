@@ -20,7 +20,14 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: {
-          'tensorflow': ['@tensorflow/tfjs-core', '@tensorflow/tfjs-backend-webgl', '@tensorflow/tfjs-backend-cpu', '@tensorflow-models/pose-detection'],
+          'tensorflow': [
+            '@tensorflow/tfjs-core', 
+            '@tensorflow/tfjs-backend-webgl', 
+            '@tensorflow/tfjs-backend-cpu', 
+            '@tensorflow-models/pose-detection',
+            '@tensorflow-models/hand-pose-detection',
+            '@mediapipe/hands'
+          ],
         },
       },
     },
