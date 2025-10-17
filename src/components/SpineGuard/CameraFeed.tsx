@@ -63,17 +63,25 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
 
       console.log('Initializing TensorFlow.js backend...');
       
-      // Initialize TensorFlow backend
-      await tf.setBackend('webgl');
-      await tf.ready();
+      // Initialize TensorFlow backend with fallback
+      try {
+        await tf.setBackend('webgl');
+        await tf.ready();
+        console.log('WebGL backend initialized successfully');
+      } catch (err) {
+        console.warn('WebGL backend failed, trying cpu backend:', err);
+        await tf.setBackend('cpu');
+        await tf.ready();
+      }
 
       console.log('Creating MoveNet detector...');
 
-      // Create MoveNet detector - simpler and more accurate
+      // Create MoveNet detector with proper configuration for production
       const detector = await poseDetection.createDetector(
         poseDetection.SupportedModels.MoveNet,
         {
           modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+          enableSmoothing: true,
         }
       );
 
