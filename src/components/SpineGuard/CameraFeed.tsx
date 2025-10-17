@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Camera, CameraOff } from 'lucide-react';
 import { PoseLandmarks } from './types';
 import * as poseDetection from '@tensorflow-models/pose-detection';
+import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
 import '@tensorflow/tfjs-backend-cpu';
@@ -12,17 +13,21 @@ interface CameraFeedProps {
   isActive: boolean;
   showOverlay: boolean;
   onPoseDetected: (landmarks: PoseLandmarks, confidence: number, neckAngle?: number) => void;
+  onRightFistDetected?: () => void;
+  onLeftFistDetected?: () => void;
 }
 
-export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeedProps) => {
+export const CameraFeed = ({ isActive, showOverlay, onPoseDetected, onRightFistDetected, onLeftFistDetected }: CameraFeedProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
+  const handDetectorRef = useRef<handPoseDetection.HandDetector | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
   const smoothedKeypointsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const lastGestureTimeRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
 
   useEffect(() => {
     if (!isActive) {
@@ -88,6 +93,17 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
 
       detectorRef.current = detector;
 
+      console.log('Creating hand detector...');
+      const handDetector = await handPoseDetection.createDetector(
+        handPoseDetection.SupportedModels.MediaPipeHands,
+        {
+          runtime: 'tfjs',
+          modelType: 'lite',
+          maxHands: 2,
+        }
+      );
+      handDetectorRef.current = handDetector;
+
       console.log('Starting detection loop...');
       detectPose();
       setIsLoading(false);
@@ -96,6 +112,33 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
       setError(err instanceof Error ? err.message : 'Failed to start camera');
       setIsLoading(false);
     }
+  };
+
+  const isFistClosed = (hand: handPoseDetection.Hand): boolean => {
+    const keypoints = hand.keypoints;
+    const wrist = keypoints.find(kp => kp.name === 'wrist');
+    const thumbTip = keypoints.find(kp => kp.name === 'thumb_tip');
+    const indexTip = keypoints.find(kp => kp.name === 'index_finger_tip');
+    const middleTip = keypoints.find(kp => kp.name === 'middle_finger_tip');
+    const ringTip = keypoints.find(kp => kp.name === 'ring_finger_tip');
+    const pinkyTip = keypoints.find(kp => kp.name === 'pinky_tip');
+
+    if (!wrist || !thumbTip || !indexTip || !middleTip || !ringTip || !pinkyTip) return false;
+
+    // Calculate distances from fingertips to wrist
+    const getDistance = (p1: { x: number; y: number }, p2: { x: number; y: number }) => {
+      return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+    };
+
+    const thumbDist = getDistance(thumbTip, wrist);
+    const indexDist = getDistance(indexTip, wrist);
+    const middleDist = getDistance(middleTip, wrist);
+    const ringDist = getDistance(ringTip, wrist);
+    const pinkyDist = getDistance(pinkyTip, wrist);
+
+    // Fist is closed when all fingertips are close to wrist
+    const avgDist = (indexDist + middleDist + ringDist + pinkyDist) / 4;
+    return avgDist < 100; // Threshold for fist detection
   };
 
   const detectPose = async () => {
@@ -152,6 +195,30 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
             rightHip: { x: rightHip.x, y: rightHip.y, z: 0 },
           };
           onPoseDetected(poseLandmarks, avgConfidence, neckAngle);
+        }
+      }
+
+      // Hand gesture detection
+      if (handDetectorRef.current && (onRightFistDetected || onLeftFistDetected)) {
+        const hands = await handDetectorRef.current.estimateHands(videoRef.current);
+        const now = Date.now();
+        
+        for (const hand of hands) {
+          if (isFistClosed(hand)) {
+            const isRight = hand.handedness === 'Right';
+            const lastTime = isRight ? lastGestureTimeRef.current.right : lastGestureTimeRef.current.left;
+            
+            // Debounce: only trigger once every 2 seconds
+            if (now - lastTime > 2000) {
+              if (isRight && onRightFistDetected) {
+                onRightFistDetected();
+                lastGestureTimeRef.current.right = now;
+              } else if (!isRight && onLeftFistDetected) {
+                onLeftFistDetected();
+                lastGestureTimeRef.current.left = now;
+              }
+            }
+          }
         }
       }
     } catch (err) {
@@ -277,6 +344,11 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected }: CameraFeed
     if (detectorRef.current) {
       detectorRef.current.dispose();
       detectorRef.current = null;
+    }
+
+    if (handDetectorRef.current) {
+      handDetectorRef.current.dispose();
+      handDetectorRef.current = null;
     }
   };
 

@@ -401,6 +401,8 @@ const Index = () => {
               isActive={isActive}
               showOverlay={settings.showOverlay}
               onPoseDetected={calculatePosture}
+              onRightFistDetected={handleCaptureNeutral}
+              onLeftFistDetected={handleCaptureSlouch}
             />
 
             {/* Controls */}

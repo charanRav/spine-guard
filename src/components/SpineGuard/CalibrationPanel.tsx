@@ -24,6 +24,14 @@ export const CalibrationPanel = ({
         Personalized Calibration
       </h2>
       
+      <div className="mb-6 p-4 bg-primary/10 rounded-lg border border-primary/20">
+        <p className="text-sm font-medium text-foreground mb-2">✨ Gesture Control Enabled</p>
+        <p className="text-xs text-muted-foreground">
+          Make a <strong>right hand fist ✊</strong> for neutral position or a <strong>left hand fist ✊</strong> for slouch position.
+          You can also use the buttons below.
+        </p>
+      </div>
+
       <p className="text-muted-foreground text-sm mb-6">
         Help Spine Guard learn your unique posture. Sit comfortably in your best posture,
         then capture your neutral position. Next, slouch naturally and capture that too.
