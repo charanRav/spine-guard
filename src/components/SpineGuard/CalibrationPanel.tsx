@@ -27,7 +27,7 @@ export const CalibrationPanel = ({
       <div className="mb-6 p-4 bg-primary/10 rounded-lg border border-primary/20">
         <p className="text-sm font-medium text-foreground mb-2">✨ Gesture Control Enabled</p>
         <p className="text-xs text-muted-foreground">
-          Make a <strong>right hand fist ✊</strong> for neutral position or a <strong>left hand fist ✊</strong> for slouch position.
+          Raise your <strong>right hand 🖐️</strong> for neutral position or <strong>left hand 🖐️</strong> for slouch position.
           You can also use the buttons below.
         </p>
       </div>

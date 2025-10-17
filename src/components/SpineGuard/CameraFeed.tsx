@@ -114,31 +114,30 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected, onRightFistD
     }
   };
 
-  const isFistClosed = (hand: handPoseDetection.Hand): boolean => {
+  const isHandRaised = (hand: handPoseDetection.Hand): boolean => {
     const keypoints = hand.keypoints;
     const wrist = keypoints.find(kp => kp.name === 'wrist');
-    const thumbTip = keypoints.find(kp => kp.name === 'thumb_tip');
     const indexTip = keypoints.find(kp => kp.name === 'index_finger_tip');
     const middleTip = keypoints.find(kp => kp.name === 'middle_finger_tip');
     const ringTip = keypoints.find(kp => kp.name === 'ring_finger_tip');
     const pinkyTip = keypoints.find(kp => kp.name === 'pinky_tip');
 
-    if (!wrist || !thumbTip || !indexTip || !middleTip || !ringTip || !pinkyTip) return false;
+    if (!wrist || !indexTip || !middleTip || !ringTip || !pinkyTip) return false;
 
-    // Calculate distances from fingertips to wrist
-    const getDistance = (p1: { x: number; y: number }, p2: { x: number; y: number }) => {
-      return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
-    };
+    // Hand is raised when fingertips are significantly above (lower Y value) the wrist
+    // In screen coordinates, lower Y means higher position
+    const fingerTips = [indexTip, middleTip, ringTip, pinkyTip];
+    let raisedFingers = 0;
+    
+    for (const tip of fingerTips) {
+      // Check if fingertip is at least 50 pixels above wrist
+      if (wrist.y - tip.y > 50) {
+        raisedFingers++;
+      }
+    }
 
-    const thumbDist = getDistance(thumbTip, wrist);
-    const indexDist = getDistance(indexTip, wrist);
-    const middleDist = getDistance(middleTip, wrist);
-    const ringDist = getDistance(ringTip, wrist);
-    const pinkyDist = getDistance(pinkyTip, wrist);
-
-    // Fist is closed when all fingertips are close to wrist
-    const avgDist = (indexDist + middleDist + ringDist + pinkyDist) / 4;
-    return avgDist < 100; // Threshold for fist detection
+    // Consider hand raised if at least 3 fingers are extended upward
+    return raisedFingers >= 3;
   };
 
   const detectPose = async () => {
@@ -204,16 +203,18 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected, onRightFistD
         const now = Date.now();
         
         for (const hand of hands) {
-          if (isFistClosed(hand)) {
+          if (isHandRaised(hand)) {
             const isRight = hand.handedness === 'Right';
             const lastTime = isRight ? lastGestureTimeRef.current.right : lastGestureTimeRef.current.left;
             
             // Debounce: only trigger once every 2 seconds
             if (now - lastTime > 2000) {
               if (isRight && onRightFistDetected) {
+                console.log('Right hand raised detected');
                 onRightFistDetected();
                 lastGestureTimeRef.current.right = now;
               } else if (!isRight && onLeftFistDetected) {
+                console.log('Left hand raised detected');
                 onLeftFistDetected();
                 lastGestureTimeRef.current.left = now;
               }
