@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, Settings as SettingsIcon, BarChart3 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Play, Pause, Settings as SettingsIcon } from 'lucide-react';
 import { CameraFeed } from '@/components/SpineGuard/CameraFeed';
 import { StatusPill } from '@/components/SpineGuard/StatusPill';
 import { CalibrationPanel } from '@/components/SpineGuard/CalibrationPanel';
@@ -14,7 +13,6 @@ import { PostureScoreCard } from '@/components/SpineGuard/PostureScoreCard';
 import { DetectionQuality } from '@/components/SpineGuard/DetectionQuality';
 import { PostureModeToggle } from '@/components/SpineGuard/PostureModeToggle';
 import { useToast } from '@/hooks/use-toast';
-import { saveSessionToHistory } from '@/utils/analyticsStorage';
 import {
   PostureStatus,
   CalibrationData,
@@ -53,7 +51,6 @@ const DEFAULT_ACHIEVEMENTS = [
 
 const Index = () => {
   const { toast } = useToast();
-  const navigate = useNavigate();
   const [isActive, setIsActive] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<PostureStatus>('Uncalibrated');
@@ -359,15 +356,6 @@ const Index = () => {
         moderateCount: 0,
         poorCount: 0,
       });
-    } else {
-      // Save session data when stopping
-      if (sessionData.readings.length > 0) {
-        saveSessionToHistory(sessionData);
-        toast({
-          title: 'Session Saved',
-          description: 'Your session has been saved to analytics history.',
-        });
-      }
     }
     setIsActive(!isActive);
   };
@@ -386,24 +374,14 @@ const Index = () => {
                 Your friendly posture coach · Local & Private
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => navigate('/analytics')}
-                className="gap-2"
-              >
-                <BarChart3 className="w-4 h-4" />
-                Analytics
-              </Button>
-              <Button
-                variant="secondary"
-                size="icon"
-                onClick={() => setShowSettings(!showSettings)}
-                className="rounded-full"
-              >
-                <SettingsIcon className="w-5 h-5" />
-              </Button>
-            </div>
+            <Button
+              variant="secondary"
+              size="icon"
+              onClick={() => setShowSettings(!showSettings)}
+              className="rounded-full"
+            >
+              <SettingsIcon className="w-5 h-5" />
+            </Button>
           </div>
         </div>
       </header>
