@@ -28,6 +28,8 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected, onRightFistD
   const animationRef = useRef<number | null>(null);
   const smoothedKeypointsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const lastGestureTimeRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
+  const lastDetectionTimeRef = useRef<number>(0);
+  const fpsTargetRef = useRef<number>(1000 / 30); // 30 FPS target
 
   useEffect(() => {
     if (!isActive) {
@@ -146,6 +148,14 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected, onRightFistD
       return;
     }
 
+    // Throttle detection to 30 FPS for smoother performance
+    const now = performance.now();
+    if (now - lastDetectionTimeRef.current < fpsTargetRef.current) {
+      animationRef.current = requestAnimationFrame(detectPose);
+      return;
+    }
+    lastDetectionTimeRef.current = now;
+
     try {
       const poses = await detectorRef.current.estimatePoses(videoRef.current);
       
@@ -237,8 +247,8 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected, onRightFistD
 
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-    // Smooth keypoints using exponential moving average
-    const smoothingFactor = 0.3;
+    // Smooth keypoints using exponential moving average for fluid tracking
+    const smoothingFactor = 0.5; // Increased for smoother motion
     pose.keypoints.forEach(keypoint => {
       if (keypoint.score && keypoint.score > 0.3) {
         const prev = smoothedKeypointsRef.current.get(keypoint.name || '');
@@ -366,14 +376,16 @@ export const CameraFeed = ({ isActive, showOverlay, onPoseDetected, onRightFistD
             <>
               <video
                 ref={videoRef}
-                className="absolute inset-0 w-full h-full object-cover"
+                className="absolute inset-0 w-full h-full object-cover transform-gpu"
+                style={{ willChange: 'transform' }}
                 playsInline
                 autoPlay
                 muted
               />
               <canvas
                 ref={canvasRef}
-                className="absolute inset-0 w-full h-full"
+                className="absolute inset-0 w-full h-full transform-gpu"
+                style={{ willChange: 'transform' }}
                 width={640}
                 height={480}
               />
