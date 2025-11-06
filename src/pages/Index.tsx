@@ -374,7 +374,7 @@ const Index = () => {
                 Your friendly posture coach · Local & Private
               </p>
               <p className="text-xs text-primary-foreground/60 mt-1">
-                Developed by Snigdha sri and Manvitha
+                Developed by Recuriq
               </p>
             </div>
             <Button
@@ -493,7 +493,7 @@ const Index = () => {
             No data is uploaded or stored on any server
           </p>
           <p className="mt-3 text-xs">
-            Developed by Snigdha sri and Manvitha
+            Developed by Recuriq
           </p>
         </div>
       </footer>
