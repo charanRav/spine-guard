@@ -189,10 +189,11 @@ const Index = () => {
         } else {
           status = 'Poor';
         }
+        console.log(`Posture Check - Angle: ${newSmoothed.toFixed(1)}°, Good: ${calibration.goodThreshold.toFixed(1)}°, Moderate: ${calibration.moderateThreshold.toFixed(1)}°, Status: ${status}`);
       } else {
-        // Fallback heuristics if not calibrated (adjusted for mode)
-        const baseGood = settings.postureMode === 'sitting' ? 6 : 8;
-        const baseModerate = settings.postureMode === 'sitting' ? 12 : 15;
+        // More realistic fallback heuristics if not calibrated
+        const baseGood = settings.postureMode === 'sitting' ? 15 : 20;
+        const baseModerate = settings.postureMode === 'sitting' ? 25 : 30;
         
         if (newSmoothed <= baseGood) {
           status = 'Good';
@@ -201,6 +202,7 @@ const Index = () => {
         } else {
           status = 'Poor';
         }
+        console.log(`Posture Check (Uncalibrated) - Angle: ${newSmoothed.toFixed(1)}°, Good threshold: ${baseGood}°, Moderate threshold: ${baseModerate}°, Status: ${status}`);
       }
 
       // Update status and track
